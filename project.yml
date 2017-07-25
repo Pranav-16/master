@@ -1,0 +1,57 @@
+---
+
+- name: setup python on host
+  remote_user: ubuntu
+  sudo: yes
+  hosts: 
+  gather_facts: no
+  pre_tasks:
+    - raw: test -e /usr/bin/python || (apt -y update && apt install -y python-minimal)
+    - setup: # aka gather_facts
+  tasks:
+    # etc. etc.  
+
+- name: setup icinga on host
+  remote_user: ubuntu
+  sudo: yes
+  hosts: 
+  roles:
+    - icinga2-ansible-classic-ui/
+  tasks:
+    - apt:
+        name: python
+        state: latest
+    - apt:
+        name: python-pip
+        state: latest
+    - name: Docker-PY
+      pip:
+        name: "{{ item }}"
+      with_items:
+        - six==1.10.0
+        - docker-py==1.10.6
+
+    - name: install docker
+      shell: curl -sSL https://get.docker.com/ | sh
+      args:
+        creates: /usr/bin/docker
+  
+    - name: Wait for the Docker server to start
+      action: raw docker version
+      register: docker_version
+      until: docker_version.stdout.find("Client") != -1
+      retries: 30
+      delay: 10
+
+    - name: mysql container
+      docker:
+        name: mysql 
+        image: mysql:5.7
+        state: running
+        env: "MYSQL_ROOT_PASSWORD=my-secret-pw"
+
+    - name: apache container
+      docker:
+        name: apache2
+        image: httpd:2.2.34
+        state: running
